@@ -10,6 +10,25 @@ from .models import Profile
 from rest_framework import serializers
 from django.contrib.auth.models import User
 
+from .serializers import UserLoginSerializer, ProfileSerializer
+
+
+class UserLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        """Process user login"""
+        serializer = UserLoginSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            remember_me = serializer.validated_data['remember_me']
+            login(request, user)
+            if not remember_me:
+                request.session.set_expiry(0)
+            return Response({"message": "Login successful."}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class ProfileViewSet(UserLoginView.ViewSet):
     permission_classes = [IsAuthenticated]
 

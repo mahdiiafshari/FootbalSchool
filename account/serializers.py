@@ -1,8 +1,8 @@
+from django.contrib.auth import authenticate
 from django.contrib.auth.forms import PasswordChangeForm
 from rest_framework import serializers
 from django.contrib.auth.models import User
 
-from account.forms import UserLoginForm
 from account.models import Profile
 
 
@@ -46,10 +46,21 @@ class UserLoginSerializer(serializers.Serializer):
     remember_me = serializers.BooleanField(default=False)
 
     def validate(self, data):
-        form = UserLoginForm(data=data, request=self.context['request'])
-        if form.is_valid():
-            return {'user': form.get_user(), 'remember_me': data.get('remember_me')}
-        raise serializers.ValidationError(form.errors)
+        username = data.get("username")
+        password = data.get("password")
+        request = self.context.get("request")
+
+        if username and password:
+            user = authenticate(request=request, username=username, password=password)
+            if not user:
+                raise serializers.ValidationError("Invalid username or password")
+        else:
+            raise serializers.ValidationError("Must include username and password")
+
+        return {
+            "user": user,
+            "remember_me": data.get("remember_me"),
+        }
 
 class PasswordChangeSerializer(serializers.Serializer):
     old_password = serializers.CharField(write_only=True)
