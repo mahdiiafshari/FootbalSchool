@@ -1,191 +1,107 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.views import View
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib import messages
-from django.core.exceptions import ValidationError
-from .models import Profile
-from .forms import UserUpdateForm, ProfileUpdateForm, UserCreateForm, UserLoginForm
+from rest_framework import viewsets, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.decorators import action
 from django.contrib.auth import login, update_session_auth_hash
+from django.core.exceptions import ValidationError
 from django.contrib.auth.forms import PasswordChangeForm
+from .models import Profile
+from rest_framework import serializers
+from django.contrib.auth.models import User
 
+class ProfileViewSet(UserLoginView.ViewSet):
+    permission_classes = [IsAuthenticated]
 
-class ProfileDisplayView(LoginRequiredMixin, View):
-    """Display user profile (read-only)"""
-
-    template_name = 'account/profile_display.html'
-
-    def get(self, request):
+    def retrieve(self, request):
         """Display user profile information"""
         try:
-            # Get or 404 profile
-            profile = get_object_or_404(Profile.objects.select_related('user'), user=request.user)
-            context = {
-                'profile': profile,
-            }
-            return render(request, self.template_name, context)
-
+            profile = Profile.objects.select_related('user').get(user=request.user)
+            serializer = ProfileSerializer(profile)
+            return Response(serializer.data)
+        except Profile.DoesNotExist:
+            return Response({"error": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            messages.error(request, 'Error displaying profile.')
-            return redirect('core:home')
+            return Response({"error": "Error displaying profile."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-class ProfileEditView(LoginRequiredMixin, View):
-    """Edit user profile"""
-
-    template_name = 'account/profile_edit.html'
-
-    def get(self, request):
-        """Display profile edit form"""
+    @action(detail=False, methods=['get', 'post'], url_path='edit')
+    def edit(self, request):
+        """Edit user profile"""
         try:
-            # Get or 404 profile
-            profile = get_object_or_404(Profile.objects.select_related('user'), user=request.user)
+            profile = Profile.objects.select_related('user').get(user=request.user)
+            if request.method == 'GET':
+                user_serializer = UserUpdateSerializer(request.user)
+                profile_serializer = ProfileUpdateSerializer(profile)
+                return Response({
+                    'user': user_serializer.data,
+                    'profile': profile_serializer.data
+                })
 
-            user_update_form = UserUpdateForm(instance=request.user)
-            profile_update_form = ProfileUpdateForm(instance=profile)
+            elif request.method == 'POST':
+                user_serializer = UserUpdateSerializer(request.user, data=request.data.get('user', {}))
+                profile_serializer = ProfileUpdateSerializer(profile, data=request.data.get('profile', {}))
 
-            context = {
-                'user_update_form': user_update_form,
-                'profile_update_form': profile_update_form,
-            }
-            return render(request, self.template_name, context)
+                is_valid = user_serializer.is_valid() and profile_serializer.is_valid()
+                if is_valid:
+                    try:
+                        user_serializer.save()
+                        profile_serializer.save()
+                        return Response({"message": "Profile updated successfully."}, status=status.HTTP_200_OK)
+                    except ValidationError as e:
+                        return Response({"error": f"Validation error: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+                    except Exception as e:
+                        return Response({"error": "Error saving information."},
+                                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                else:
+                    errors = {
+                        'user_errors': user_serializer.errors,
+                        'profile_errors': profile_serializer.errors
+                    }
+                    return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Profile.DoesNotExist:
+            return Response({"error": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            messages.error(request, 'Error displaying profile.')
-            return redirect('account:profile_display')
+            return Response({"error": "Error processing request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UserSignupView(APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        """Process profile edit form"""
-        try:
-            # Get profile
-            profile = get_object_or_404(Profile.objects.select_related('user'), user=request.user)
-
-            # Process edit forms
-            user_update_form = UserUpdateForm(request.POST, instance=request.user)
-            profile_update_form = ProfileUpdateForm(request.POST, request.FILES, instance=profile)
-
-            # Validate forms
-            if user_update_form.is_valid() and profile_update_form.is_valid():
-                try:
-                    # Save user information
-                    user_update_form.save()
-
-                    # Save profile information
-                    profile_update_form.save()
-
-                    messages.success(request, 'Your profile has been updated successfully.')
-                    return redirect('account:profile_display')
-
-                except ValidationError as e:
-                    messages.error(request, f'Validation error: {str(e)}')
-
-                except Exception as e:
-                    messages.error(request, 'Error saving information. Please try again.')
-            else:
-                # Display form errors
-                for form_name, form in [('user', user_update_form), ('profile', profile_update_form)]:
-                    for field, errors in form.errors.items():
-                        for error in errors:
-                            messages.error(request, f'{form_name}.{field}: {error}')
-
-            # Return form with errors
-            context = {
-                'user_form': user_update_form,
-                'profile_form': profile_update_form,
-                'profile': profile,
-            }
-
-            return render(request, self.template_name, context)
-
-        except Profile.DoesNotExist:  # type: ignore
-            messages.error(request, 'Your profile was not found. Please contact support.')
-            return redirect('account:profile_display')
-
-        except Exception as e:
-            messages.error(request, 'Error processing request. Please try again.')
-            return redirect('account:profile_display')
+        """Process user signup"""
+        serializer = UserCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User created successfully."}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserSignupView(View):
-    """User registration view"""
-
-    template_name = 'account/signup.html'
-    form_class = UserCreateForm
-    success_url = 'account:profile_display'
-
-    def get(self, request):
-        """Display signup form"""
-        form = self.form_class()
-        return render(request, self.template_name, {'form': form})
+class UserLoginView(APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        """Process signup form"""
-        form = self.form_class(data=request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect(self.success_url)
-        return render(request, self.template_name, {'form': form})
-
-
-class UserLoginView(View):
-    """User login view"""
-
-    template_name = 'account/login.html'
-    form_class = UserLoginForm
-    success_url = 'account:profile_display'
-
-    def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            return redirect('account:profile_display')
-        return super().dispatch(request, *args, **kwargs)
-
-    def get(self, request):
-        """Display login form"""
-        form = self.form_class()
-        return render(request, self.template_name, {'form': form})
-
-    def post(self, request):
-        """Process login form"""
-        form = self.form_class(request=request, data=request.POST)
-        if form.is_valid():
-            user = form.get_user()
+        """Process user login"""
+        serializer = UserLoginSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            remember_me = serializer.validated_data['remember_me']
             login(request, user)
-
-            if not form.cleaned_data.get('remember_me'):
+            if not remember_me:
                 request.session.set_expiry(0)
-
-            return redirect(self.success_url)
-
-        return render(request, self.template_name, {'form': form})
+            return Response({"message": "Login successful."}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PasswordChangeUserView(LoginRequiredMixin, View):
-    """Allow logged-in users to change their password"""
-
-    template_name = 'account/password_change.html'
-    form_class = PasswordChangeForm
-    success_url = 'account:profile_display'
-
-    def get(self, request):
-        """Display password change form"""
-        form = self.form_class(user=request.user)
-        return render(request, self.template_name, {'form': form})
+class PasswordChangeView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """Process password change form"""
-        form = self.form_class(user=request.user, data=request.POST)
-
-        if form.is_valid():
+        """Process password change"""
+        serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            form = PasswordChangeForm(user=request.user, data=serializer.validated_data)
             user = form.save()
-            # Keep the user logged in after password change
             update_session_auth_hash(request, user)
-            messages.success(request, 'رمز عبور شما با موفقیت تغییر کرد.')
-            return redirect(self.success_url)
-
-        return render(request, self.template_name, {'form': form})
-
-
-class PasswordResetUserView(View):
-    """Allow logged-in users to reset their password"""
-
-    def get(self, request):
-        pass
-    # this feature is not implemented yet
+            return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
