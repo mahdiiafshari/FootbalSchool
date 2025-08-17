@@ -130,3 +130,15 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
+
+# djoser
+
+DJOSER = {
+    "SERIALIZERS": {
+        "user": "account.serializers.UserSerializer",
+        "current_user": "account.serializers.UserSerializer",
+        "user_update": "account.serializers.UserUpdateSerializer",
+        "user_create": "account.serializers.UserSerializer",
+    }
+}
+

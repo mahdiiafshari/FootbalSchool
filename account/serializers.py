@@ -1,74 +1,53 @@
-from django.contrib.auth import authenticate
-from django.contrib.auth.forms import PasswordChangeForm
+# account/serializers.py
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from .models import User, Profile
 
-from account.models import Profile
+
+class ProfileSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Profile model
+    - qr_code is read-only (auto-generated)
+    """
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "image_profile",
+            "qr_code",
+            "uuid",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["qr_code", "uuid", "created_at", "updated_at"]
 
 
 class UserSerializer(serializers.ModelSerializer):
+    """
+    Serializer for custom User model
+    - phone_number is the USERNAME_FIELD (login field)
+    """
+    profile = ProfileSerializer(read_only=True)  # Nested profile
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+        fields = [
+            "id",
+            "username",
+            "email",
+            "phone_number",
+            "first_name",
+            "last_name",
+            "role",
+            "profile",
+        ]
+        read_only_fields = ["id", "role"]  # You can make role editable if you want
 
-class ProfileSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-
-    class Meta:
-        model = Profile
-        fields = '__all__'
 
 class UserUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating user data
+    """
     class Meta:
         model = User
-        fields = ['username', 'email', 'first_name', 'last_name']
+        fields = ["username", "email", "first_name", "last_name"]
 
-class ProfileUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Profile
-        fields = '__all__'
-        read_only_fields = ('user',)
-
-class UserCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['username', 'email', 'password']
-        extra_kwargs = {'password': {'write_only': True}}
-
-    def create(self, validated_data):
-        user = User.objects.create_user(**validated_data)
-        Profile.objects.create(user=user)
-        return user
-
-class UserLoginSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
-    remember_me = serializers.BooleanField(default=False)
-
-    def validate(self, data):
-        username = data.get("username")
-        password = data.get("password")
-        request = self.context.get("request")
-
-        if username and password:
-            user = authenticate(request=request, username=username, password=password)
-            if not user:
-                raise serializers.ValidationError("Invalid username or password")
-        else:
-            raise serializers.ValidationError("Must include username and password")
-
-        return {
-            "user": user,
-            "remember_me": data.get("remember_me"),
-        }
-
-class PasswordChangeSerializer(serializers.Serializer):
-    old_password = serializers.CharField(write_only=True)
-    new_password1 = serializers.CharField(write_only=True)
-    new_password2 = serializers.CharField(write_only=True)
-
-    def validate(self, data):
-        form = PasswordChangeForm(user=self.context['request'].user, data=data)
-        if form.is_valid():
-            return data
-        raise serializers.ValidationError(form.errors)
