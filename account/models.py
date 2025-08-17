@@ -136,8 +136,8 @@ class Profile(models.Model):
                     save=False
                 )
                 buffer.close()
-            except Exception as e:
-                # Log the error if needed
+            except:
+
                 pass
 
     def save(self, *args, **kwargs):
