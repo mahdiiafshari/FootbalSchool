@@ -40,7 +40,8 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "drf_spectacular_sidecar",
     "account",
-    "manager"
+    "manager",
+    "school",
 
 ]
 
@@ -124,6 +125,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # user model
 AUTH_USER_MODEL = 'account.User'
+
 # drf_spectacular
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
@@ -133,7 +135,6 @@ REST_FRAMEWORK = {
 }
 
 # djoser
-
 DJOSER = {
     "SERIALIZERS": {
         "user": "account.serializers.UserSerializer",
