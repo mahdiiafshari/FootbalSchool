@@ -27,4 +27,5 @@ urlpatterns = [
     re_path(r'^auth/', include('djoser.urls.jwt')),
     path("api/", include("manager.urls"), name="manager"),
     path("api/", include("school.urls"), name="school"),
+    path("api/", include("player.urls"), name="player"),
 ]
