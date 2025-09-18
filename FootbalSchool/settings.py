@@ -43,7 +43,12 @@ INSTALLED_APPS = [
     "manager",
     "school",
     "player",
-    "coach"
+    "coach",
+    "team",
+    "training_session" ,
+    "medical" ,
+    "attendance",
+
 
 ]
 
