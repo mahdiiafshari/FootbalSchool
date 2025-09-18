@@ -52,7 +52,7 @@ class Attendance(models.Model):
         unique_together = ("player", "training_session")
         verbose_name = _("Attendance")
         verbose_name_plural = _("Attendances")
-        ordering = ["session__date", "player"]
+        ordering = ["player"]
 
     def __str__(self):
         return f"{self.player} - {self.training_session} ({self.status})"

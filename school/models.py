@@ -14,14 +14,14 @@ class School(models.Model):
     email = models.EmailField(unique=True, verbose_name=_("Official Email"))
     is_active = models.BooleanField(default=True, verbose_name=_("Is Active"))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created At"))
-    manager = models.OneToOneField(Manager, on_delete=models.PROTECT, related_name="school")
+    manager = models.OneToOneField('manager.Manager', on_delete=models.PROTECT, related_name="school")
 
     class Meta:
         verbose_name = _("School")
         verbose_name_plural = _("Schools")
         ordering = ["-is_active", "-created_at"]
         indexes = [
-            models.Index(fields=["manager"]),
+            models.Index(fields=["email"]),
             models.Index(fields=["is_active"]),
         ]
 
@@ -29,15 +29,20 @@ class School(models.Model):
         return self.name
 
     def deactivate(self):
-        if self.is_active:
-            self.is_active = False
-            self.save()
-        else:
-            raise PermissionError("This school already deactivated.")
+        self.is_active = False
+        self.save()
 
-    def activate(self):
-        if not self.is_active:
-            self.is_active = True
-            self.save()
-        else:
-            raise PermissionError("This school already activated.")
+class Semester(models.Model):
+    name = models.CharField(max_length=100)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    school = models.ForeignKey("school.School", on_delete=models.CASCADE, related_name="semesters")
+
+    class Meta:
+        ordering = ["-start_date"]
+        constraints = [
+            models.UniqueConstraint(fields=['name', 'school'], name='unique_team_name_per_school')
+        ]
+
+    def __str__(self):
+        return f"{self.name}"
